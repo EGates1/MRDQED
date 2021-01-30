@@ -6,7 +6,7 @@ library(grid)
 library(gridExtra)
 
 # if pngs are not all stored in the same place, use datadir and pngbasedir to locate
-datadir = './'
+datadir = '.'
 pngbasedir = file.path(datadir,"pngs/")
 
 #  load dataset.RDS, at minimum needs col ptid
@@ -140,18 +140,15 @@ server <- function(input, output, session) {
   
   # Get png image name prefix (force individual folders)
   observeEvent(input$ptid, {
-    # change png directory
-    pngdir(file.path(pngbasedir,input$ptid))
+    # TODO: option to make png directories case specific
+    # pngdir(file.path(pngbasedir,input$ptid))
+    pngdir(file.path(pngbasedir))
     # change row selection if ptid selection box is used
     # TODO: test this
     selectPage(dataTableProxy('table1'), 
       which(dataset[input$table1_rows_all,"ptid",drop=TRUE] == input$ptid) %/% 
                    input$table1_state$length + ifelse(input$table1_state$length==1,0,1)
       )
-    
-  })
-  
-  observeEvent({input$ptid}, {
     # update review status and comments
     update_reviewdisplay(logdata(),input)
     # TODO: change to reactiveVal possibly and fix png paths.
@@ -159,7 +156,7 @@ server <- function(input, output, session) {
       if(x %in% names(dataset)) {file.path(pngdir(),paste(input$ptid,x,sep="_"))
       } else {NA_character_}}))
   })
-  
+
   # change ptid selection box if row clicked
   observeEvent(input$table1_rows_selected, {
     updateSelectInput(session, "ptid",
