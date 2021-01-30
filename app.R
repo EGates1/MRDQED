@@ -10,7 +10,7 @@ datadir = '.'
 pngbasedir = file.path(datadir,"pngs/")
 
 #  load dataset.RDS, at minimum needs col ptid
-dataset <- readRDS(file.path(datadir,"appdata.RDS"))
+dataset <- read.csv(file.path(datadir,"appdata.csv"))
 
 reviewlabs = c("Single image unusable" = "badImage",
                "Study Artifacted" = "hasArtifact",
@@ -25,7 +25,7 @@ reviewlabs = c("Single image unusable" = "badImage",
                "No pngs" = "badPNG",
                "Needs review" = "needsManual")
 
-logdata_init <- data.frame(ptid = rep(unique(dataset$ptid),each=2),
+logdata_init <- data.frame(ptid = unique(dataset$ptid),
                            reviewed = FALSE,
                            comment="",
                            stringsAsFactors = FALSE)
@@ -36,12 +36,12 @@ ui <- fluidPage(
                 sidebarPanel(width=2,
                              wellPanel(
                                h3("Data display"),
-                               selectInput("ptid", NULL, sort(unique(dataset$ptid)), selected = "HRP0848"),
+                               selectInput("ptid", NULL, unique(dataset$ptid)),
                                radioButtons("pictype","Review:",
                                             choices = c("Registrations"="Reg","Maxes"="Max"),
                                             inline=TRUE),
                                checkboxGroupInput("tabvars", "Variables to show:",
-                                                  choices = head(setdiff(names(dataset),c("ptid","T1","T2","FLAIR","T1CE")), 10),
+                                                  choices = head(setdiff(names(dataset),c("ptid","T1","T2","FLAIR","T1CE","MASK","SEG","ROI2")), 10),
                                                   selected = NULL,
                                                   inline = TRUE),
                                h3("Data review"),
@@ -62,23 +62,14 @@ ui <- fluidPage(
                           fluidPage(
                             fluidRow(
                               column(4,
-                                     # fluidRow(
-                                      #  splitLayout(cellWidths = c("50%", "50%"),
-                                      #              plotOutput("plt1",height = "250px",hover = "plot_hover", click = "plot_click"),
-                                      #              plotOutput("plt2",height = "250px",hover = "plot_hover", click = "plot_click")
-                                       # ),
-                                       # textOutput("hover_info")
-                                     # ),
                                      fluidRow(
                                        DT::dataTableOutput("table1")),
                                      fluidRow(
                                        plotOutput("png2",width="100%",height="500px"))
                               ),
                               column(8,
-                                     plotOutput("png3",width="100%",height="900px"))#,
-                              # column(1,
-                              #        plotOutput("colorbars",width="100%",height="900px"))
-                            )
+                                     plotOutput("png3",width="100%",height="900px"))
+                              )
                           )
                 )
                 
@@ -92,7 +83,7 @@ server <- function(input, output, session) {
   display_images <- reactiveVal()
   
   update_reviewlog <- function(data, input, new_reviewvars=FALSE, new_comment=FALSE){
-    logidx = head(which(logdata()$ptid==input$ptid & logdata()$studytype == input$studytype),n=1)
+    logidx = head(which(logdata()$ptid==input$ptid),n=1)
     newlog = logdata()
     if(new_comment) newlog[logidx, "comment"] = input$reviewcomment
     if(new_reviewvars){
@@ -105,7 +96,7 @@ server <- function(input, output, session) {
   
   # for returning to an already-viewed case
   update_reviewdisplay <- function(data, input){
-    logidx = head(which(data$ptid==input$ptid & data$studytype == input$studytype), n=1)
+    logidx = head(which(data$ptid==input$ptid), n=1)
     updateTextInput(session,"reviewcomment",
                     value = data$comment[logidx])
     updateCheckboxGroupInput(session, "reviewvars",
@@ -162,11 +153,6 @@ server <- function(input, output, session) {
     updateSelectInput(session, "ptid",
                       selected=dataset[input$table1_rows_selected,'ptid'])
   })
-  ## change ptid if plots are clicked
-  # observeEvent(input$plot_click, {
-  #   np <- nearPoints(dataset, input$plot_click, threshold = 5, maxpoints = 1, addDist = FALSE)
-  #   updateSelectInput(session, "ptid",
-  #                     selected=np$ptid)})
   
   # output
   output$table1 = DT::renderDataTable(DT::datatable(dataset[,c("ptid",input$tabvars),drop=F],
@@ -177,52 +163,13 @@ server <- function(input, output, session) {
                                                       pageLength = 10,
                                                       stateSave = TRUE),
                                                     rownames= FALSE))
-  
-  # highlight_plt <- reactive({geom_point(data=function(x) filter(x,ptid==input$ptid),
-  #                                       col="red",size=1.5, alpha=1)})
-  
-  # TODO: pre-render scatter plots with renderCachePlot?
-  # output$plt1 = renderPlot({
-  #   volume_annotation(
-  #     ggplot(data=dataset, 
-  #            aes_string(x=if_else(input$studytype=="PREOP", "REF_PREVOL2", "REF_POSTVOL2"),
-  #                       y=if_else(input$studytype=="PREOP", "CLARA_PREVOL2", "CLARA_POSTVOL2"))) +
-  #       xlab(sprintf("%s T2 FLAIR volume (neurosurgery)",input$studytype))) + 
-  #     highlight_plt()
-  # }) 
-  # output$plt2 = renderPlot({
-  #   volume_annotation(
-  #     ggplot(data=dataset, 
-  #            aes_string(x=if_else(input$studytype=="PREOP", "REF_PREVOL1", "REF_POSTVOL1"),
-  #                       y=if_else(input$studytype=="PREOP", "CLARA_PREVOL1", "CLARA_POSTVOL1"))) +
-  #       xlab(sprintf("%s T1 Enhancing volume (neurosurgery)",input$studytype))) +
-  #     highlight_plt()
-  # }) 
-  # 
-  # data_tooltip <- function(x) {
-  #   if (is.null(x)) return("Select a point to review")
-  #   if (is.null(x$ptid)) return(NULL)
-  #   if(nrow(x)==0) return("Select a point to review")
-  #   # txt=dataset[dataset$ptid %in% x$ptid,]
-  #   comment = logdata() %>% filter(ptid == head(x$ptid,1), studytype==input$studytype) %>% select(ptid,comment)
-  #   HTML(sprintf("%s: %s",comment$ptid,comment$comment)) # TODO: debug
-  # }
-  
-  # TODO: split up plots since hover can't work with grid arrange
-  # output$hover_info <- renderText({
-  #   # for ggplot, need to combine nearPoints with hover
-  #   np_hover = nearPoints(dataset, input$plot_hover)
-  #   data_tooltip(np_hover)
-  # })
-  
   # https://stackoverflow.com/a/53391222
-  
   output$png2 = renderPlot({
     png_image_types = c("axial1","sagittal1","coronal1","axial2","sagittal2","coronal2",
                         "axial3","sagittal3","coronal3")
     pngnames=file.path(pngdir(),paste0(input$ptid, "_T1CE_",png_image_types,"maskshot.png"))
     # https://stackoverflow.com/a/45474093
-    col.titles = c("Brain", "Tumor", "ROI2")
+    col.titles = c("MASK", "SEG", "ROI2")
     
     pngs = lapply(pngnames, function(x) if(file.exists(x)) readPNG(x) else array(0,dim = c(512,512,3)))
     asGrobs = lapply(pngs, rasterGrob)
@@ -246,10 +193,6 @@ server <- function(input, output, session) {
     nr = 4
     pngs = lapply(pngnames, function(x) if(file.exists(x)) readPNG(x) else array(0, dim = c(512,512,3)))
     asGrobs = lapply(pngs,rasterGrob)
-    # asGrobs[[length(asGrobs)]] <- grid.arrange(asGrobs[[length(asGrobs)]],
-    #                                            barpng,
-    #                                            ncol=1,heights=c(0.8,0.2))
-    
     p <- grid.arrange(grobs=lapply(seq(1,length(asGrobs),by = nr), function(i) {
       arrangeGrob(grobs=asGrobs[i:(i+nr-1)], top=col.titles[i/nr + 1], nrow=nr)
     }), ncol=length(pngnames) %/% nr)
