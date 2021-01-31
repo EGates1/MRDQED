@@ -126,7 +126,6 @@ ROI_vis <- function(image, masklist, pngname, tol=0, zmax=NULL){
     for(jjj in 1:nrow(labframe_sub)){
       oldlab = labframe_sub$original_label[jjj]
       newlab = labframe_sub$new_label[jjj]
-      print(c(oldlab,newlab))
       # bidx = boundary_idx(nii_sub,r=args$r,label=oldlab)
       # mask_combined[bidx] = newlab
       # set mask to new labels as well
